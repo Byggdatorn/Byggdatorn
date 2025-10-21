@@ -1,4 +1,3 @@
-// app/api/chat/route.js
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -8,44 +7,39 @@ const client = new OpenAI({
 
 export async function POST(req) {
   try {
-    const body = await req.json();
+    const { messages } = await req.json();
 
-    // Acceptera både { message: "text" } och { messages: [{role, content}, ...] }
-    const userMessages = body.messages
-      ? body.messages
-      : body.message
-      ? [{ role: "user", content: body.message }]
-      : [];
+    // Systemprompt – AI:ns personlighet och roll
+    const systemPrompt = {
+      role: "system",
+      content: `
+        Du är "TechByggaren" – en AI-expert på datorer och hårdvara.
+        Du hjälper användare att:
+        - bygga en ny dator utifrån budget, användningsområde och kompatibilitet
+        - uppgradera befintliga datorer (t.ex. byta grafikkort, processor, RAM)
+        - förstå vad som ger mest prestanda för pengarna
+        - förklara skillnader mellan komponenter på ett enkelt sätt
 
-    const systemPrompt = `
-Du är en professionell datorbyggare och rådgivare.
-Svara tydligt, konkret och utan markdown-symboler (*, #, **, \`, osv).
-Ditt mål är att hjälpa användaren att bygga eller uppgradera en dator.
-När du rekommenderar komponenter, motivera kort varför.
-Använd ett vänligt men kunnigt tonläge och ge ungefärliga prisangivelser när det är relevant.
-Svar på svenska.
-`;
+        Svara alltid på tydlig, flytande svenska — professionellt men lätt att förstå.
+        Använd gärna korta punktlistor där det passar.
+        Inga kodblock, inga # eller *, bara ren text.
+        Om användaren frågar om något helt utanför datorer, svara kort att du är specialiserad på datorbyggen och teknik.
+      `,
+    };
 
-    // Bygg meddelandeflödet som skickas till modellen
-    const messagesForModel = [
-      { role: "system", content: systemPrompt },
-      ...userMessages,
-    ];
-
+    // Skicka systemPrompt + användarens meddelanden
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: messagesForModel,
+      messages: [systemPrompt, ...messages],
     });
 
-    let reply = completion.choices?.[0]?.message?.content || "";
-
-    // Rensa bort vanliga markdown-tecken om de skulle finnas kvar
-    reply = reply.replace(/[#*`]/g, "");
-
+    const reply = completion.choices[0].message.content;
     return NextResponse.json({ reply });
   } catch (error) {
-    console.error("Fel i API:", error);
-    // Ge frontend ett tydligt felmeddelande
-    return NextResponse.json({ reply: "Serverfel: " + (error.message || "okänt fel") }, { status: 500 });
+    console.error(error);
+    return NextResponse.json(
+      { error: "Något gick fel när jag försökte svara 😅" },
+      { status: 500 }
+    );
   }
 }
